@@ -144,7 +144,7 @@ int SendSignedSyncEnvelope(
                     "X-TradeDNA-Signature: " + signature + "\r\n";
                     
    uchar post_data[];
-   StringToCharArray(envelope_json, post_data, 0, StringLen(envelope_json), CP_UTF8);
+   StringToUtf8Bytes(envelope_json, post_data);
    
    uchar result_data[];
    string result_headers;

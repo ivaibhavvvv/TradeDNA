@@ -102,6 +102,9 @@ async def verify_connector_hmac(
 
     # 8. Constant-time comparison
     if not hmac.compare_digest(x_tradedna_signature.lower(), expected_signature):
+        print(f"[HMAC DEBUG] Mismatch! Client sent: {x_tradedna_signature.lower()}, Expected: {expected_signature}")
+        print(f"[HMAC DEBUG] Canonical string: {canonical_str}")
+        print(f"[HMAC DEBUG] Raw body bytes: {raw_body_bytes}")
         raise UnauthorizedException("Invalid HMAC signature. Payload tampering or key mismatch detected.")
 
     return device

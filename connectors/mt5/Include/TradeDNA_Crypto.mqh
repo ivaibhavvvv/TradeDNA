@@ -61,12 +61,26 @@ int ComputeSHA256(const uchar &data[], uchar &hash_out[])
 }
 
 //+------------------------------------------------------------------+
+//| Convert string to exact UTF-8 byte array without null terminator |
+//+------------------------------------------------------------------+
+int StringToUtf8Bytes(const string str, uchar &output[])
+{
+   int count = StringToCharArray(str, output, 0, WHOLE_ARRAY, CP_UTF8);
+   if(count > 0 && ArraySize(output) > 0 && output[ArraySize(output) - 1] == 0)
+   {
+      ArrayResize(output, ArraySize(output) - 1);
+      return ArraySize(output);
+   }
+   return ArraySize(output);
+}
+
+//+------------------------------------------------------------------+
 //| Compute SHA-256 hash of a UTF-8 string returning lowercase hex   |
 //+------------------------------------------------------------------+
 string ComputeStringSHA256Hex(const string str)
 {
    uchar data[];
-   StringToCharArray(str, data, 0, StringLen(str), CP_UTF8);
+   StringToUtf8Bytes(str, data);
    uchar hash[];
    ComputeSHA256(data, hash);
    return BytesToHex(hash);
@@ -102,9 +116,9 @@ string ComputeHMACSHA256(const string key_hex, const string message)
       k_opad[i] = (uchar)(K_prime[i] ^ 0x5c);
    }
    
-   // 1. Inner Hash: SHA256(k_ipad || message_bytes)
+   // 1. Inner Hash: SHA256(k_ipad || message_bytes) without null terminator
    uchar msg_bytes[];
-   StringToCharArray(message, msg_bytes, 0, StringLen(message), CP_UTF8);
+   StringToUtf8Bytes(message, msg_bytes);
    
    uchar inner_input[];
    ArrayResize(inner_input, 64 + ArraySize(msg_bytes));
