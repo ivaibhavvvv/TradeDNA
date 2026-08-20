@@ -127,7 +127,7 @@ string ComputeStringSHA256Hex(const string str)
 }
 
 //+------------------------------------------------------------------+
-//| Standards-Compliant RFC 2104 HMAC-SHA256 Implementation          |
+//| Standards-Compliant HMAC-SHA256 via Native MQL5 CryptEncode      |
 //+------------------------------------------------------------------+
 string ComputeHMACSHA256(const string key_hex, const string message)
 {
@@ -138,50 +138,20 @@ string ComputeHMACSHA256(const string key_hex, const string message)
       PrintFormat("[TradeDNA Crypto] Error: Invalid key length (%d) for secret hex", key_len);
    }
    
-   uchar K_prime[64];
-   ArrayInitialize(K_prime, 0);
+   uchar data[];
+   StringToUtf8Bytes(message, data);
    
-   if(ArraySize(key) > 64)
+   uchar hash[];
+   ResetLastError();
+   // In MQL5, CryptEncode with CRYPT_HASH_SHA256 and non-empty key computes HMAC-SHA256 directly
+   int res = CryptEncode(CRYPT_HASH_SHA256, data, key, hash);
+   if(res > 0 && ArraySize(hash) > 0)
    {
-      uchar key_hash[];
-      ComputeSHA256(key, key_hash);
-      ArrayCopy(K_prime, key_hash, 0, 0, 32);
-   }
-   else
-   {
-      ArrayCopy(K_prime, key, 0, 0, ArraySize(key));
+      return BytesToHex(hash);
    }
    
-   uchar k_ipad[64];
-   uchar k_opad[64];
-   for(int i = 0; i < 64; i++)
-   {
-      k_ipad[i] = (uchar)(K_prime[i] ^ 0x36);
-      k_opad[i] = (uchar)(K_prime[i] ^ 0x5c);
-   }
-   
-   // 1. Inner Hash: SHA256(k_ipad || message_bytes) without null terminator
-   uchar msg_bytes[];
-   StringToUtf8Bytes(message, msg_bytes);
-   
-   uchar inner_input[];
-   ArrayResize(inner_input, 64 + ArraySize(msg_bytes));
-   ArrayCopy(inner_input, k_ipad, 0, 0, 64);
-   ArrayCopy(inner_input, msg_bytes, 64, 0, ArraySize(msg_bytes));
-   
-   uchar inner_hash[];
-   ComputeSHA256(inner_input, inner_hash);
-   
-   // 2. Outer Hash: SHA256(k_opad || inner_hash)
-   uchar outer_input[];
-   ArrayResize(outer_input, 64 + 32);
-   ArrayCopy(outer_input, k_opad, 0, 0, 64);
-   ArrayCopy(outer_input, inner_hash, 64, 0, 32);
-   
-   uchar final_hash[];
-   ComputeSHA256(outer_input, final_hash);
-   
-   return BytesToHex(final_hash);
+   PrintFormat("[TradeDNA Crypto] Error: CryptEncode HMAC failed, error: %d", GetLastError());
+   return "";
 }
 
 //+------------------------------------------------------------------+

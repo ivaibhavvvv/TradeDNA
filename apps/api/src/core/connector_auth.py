@@ -94,15 +94,24 @@ async def verify_connector_hmac(
 
     # 7. Compute expected HMAC-SHA256 signature
     device_secret_bytes = bytes.fromhex(device.device_secret)
-    expected_signature = hmac.new(
+    expected_signature_hex = hmac.new(
         device_secret_bytes,
+        canonical_bytes,
+        hashlib.sha256,
+    ).hexdigest().lower()
+    expected_signature_raw = hmac.new(
+        device.device_secret.encode("utf-8"),
         canonical_bytes,
         hashlib.sha256,
     ).hexdigest().lower()
 
     # 8. Constant-time comparison
-    if not hmac.compare_digest(x_tradedna_signature.lower(), expected_signature):
-        print(f"[HMAC DEBUG] Mismatch! Client sent: {x_tradedna_signature.lower()}, Expected: {expected_signature}")
+    is_valid = (
+        hmac.compare_digest(x_tradedna_signature.lower(), expected_signature_hex) or
+        hmac.compare_digest(x_tradedna_signature.lower(), expected_signature_raw)
+    )
+    if not is_valid:
+        print(f"[HMAC DEBUG] Mismatch! Client sent: {x_tradedna_signature.lower()}, Expected: {expected_signature_hex}")
         print(f"[HMAC DEBUG] Canonical string: {canonical_str}")
         print(f"[HMAC DEBUG] Raw body bytes: {raw_body_bytes}")
         raise UnauthorizedException("Invalid HMAC signature. Payload tampering or key mismatch detected.")
