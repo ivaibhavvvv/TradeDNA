@@ -10,8 +10,8 @@ import { Input } from "@/components/ui/input";
 
 export default function LoginPage() {
   const { login } = useAuth();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("vaibhav251001@gmail.com");
+  const [password, setPassword] = useState("TradeDNA@2026");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -24,6 +24,20 @@ export default function LoginPage() {
       await login({ email, password });
     } catch (err: any) {
       setError(err?.message || "Invalid email or password");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleQuickSignIn = async () => {
+    setEmail("vaibhav251001@gmail.com");
+    setPassword("TradeDNA@2026");
+    setError(null);
+    setIsLoading(true);
+    try {
+      await login({ email: "vaibhav251001@gmail.com", password: "TradeDNA@2026" });
+    } catch (err: any) {
+      setError(err?.message || "Quick sign-in failed");
     } finally {
       setIsLoading(false);
     }
@@ -81,10 +95,20 @@ export default function LoginPage() {
           <Button
             type="submit"
             variant="primary"
-            className="w-full mt-2"
+            className="w-full mt-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-semibold shadow-lg shadow-cyan-500/20"
             disabled={isLoading}
           >
-            {isLoading ? "Authenticating..." : "Sign In"}
+            {isLoading ? "Authenticating..." : "Sign In to Workspace"}
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleQuickSignIn}
+            className="w-full border-cyan-500/40 hover:bg-cyan-950/40 text-cyan-400 text-xs font-mono"
+            disabled={isLoading}
+          >
+            ⚡ 1-Click Quick Sign In (Vaibhav)
           </Button>
 
           <div className="mt-4 text-center text-xs text-slate-400">

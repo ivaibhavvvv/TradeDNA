@@ -13,7 +13,7 @@ from src.core.logging import logger, setup_logging
 settings = get_settings()
 
 
-from src.core.database import check_db_health, engine
+from src.core.database import check_db_health, engine, init_db_schema
 
 
 @asynccontextmanager
@@ -30,10 +30,40 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.error(f"Startup configuration error: {e}")
         raise
 
-    # 2. Database readiness check on startup
+    # 2. Database readiness check and schema initialization on startup
     db_ok = await check_db_health()
     if db_ok:
         logger.info("Database connectivity established successfully.")
+        await init_db_schema()
+        # Ensure default personal workspace user exists
+        try:
+            from sqlalchemy import select
+            from src.core.database import async_session_factory
+            from src.core.security import hash_password
+            from src.models.user import User
+            from src.models.tenant import Tenant
+
+            async with async_session_factory() as db:
+                stmt = select(User).where(User.email == "vaibhav251001@gmail.com")
+                res = await db.execute(stmt)
+                user = res.scalar_one_or_none()
+                if not user:
+                    tenant = Tenant(name="Vaibhav Chauhan's Workspace")
+                    db.add(tenant)
+                    await db.flush()
+                    user = User(
+                        tenant_id=tenant.id,
+                        email="vaibhav251001@gmail.com",
+                        password_hash=hash_password("TradeDNA@2026"),
+                        full_name="Vaibhav Chauhan",
+                        is_active=True,
+                        is_verified=True,
+                    )
+                    db.add(user)
+                    await db.commit()
+                    logger.info("Default personal user seeded successfully.")
+        except Exception as e:
+            logger.warning(f"Default user seeding check notice: {e}")
     else:
         logger.warning("Database connectivity check failed on startup. Service running in degraded state.")
 

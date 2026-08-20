@@ -55,3 +55,27 @@ async def check_db_health() -> bool:
     except Exception as e:
         logger.error(f"Database health check failed: {e}")
         return False
+
+
+async def init_db_schema() -> None:
+    """Ensure all database tables and schema objects are created on startup."""
+    try:
+        from src.models.base import Base
+        import src.models.user
+        import src.models.tenant
+        import src.models.device
+        import src.models.raw_event
+        import src.models.canonical_ledger
+        import src.models.sync_state
+        import src.models.reconciliation
+        import src.models.analytics
+        import src.models.alert
+        import src.models.account_settings
+        import src.models.audit
+        import src.models.reconstruction_run
+
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("Database schema initialized successfully.")
+    except Exception as e:
+        logger.error(f"Failed to auto-initialize database schema: {e}")

@@ -51,15 +51,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // If user metadata exists or on dashboard route, attempt silent refresh via HttpOnly cookie
+      // Seamless Auto-Sign-In for Personal/Local Deployment
       try {
-        const authData = await authApi.refresh();
+        const authData = await authApi.login({
+          email: "vaibhav251001@gmail.com",
+          password: "TradeDNA@2026",
+        });
+        setStoredAuth(authData.access_token, authData.user);
         setToken(authData.access_token);
         setUser(authData.user);
       } catch {
-        clearStoredAuth();
-        setToken(null);
-        setUser(null);
+        try {
+          const authData = await authApi.refresh();
+          setStoredAuth(authData.access_token, authData.user);
+          setToken(authData.access_token);
+          setUser(authData.user);
+        } catch {
+          clearStoredAuth();
+          setToken(null);
+          setUser(null);
+        }
       } finally {
         setIsLoading(false);
       }
