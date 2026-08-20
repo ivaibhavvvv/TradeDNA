@@ -208,7 +208,7 @@ export default function TradesPage() {
                   <TableHead>Volume</TableHead>
                   <TableHead>Entry Price</TableHead>
                   <TableHead>Exit Price</TableHead>
-                  <TableHead>Open Time (UTC)</TableHead>
+                  <TableHead>Open Time (IST)</TableHead>
                   <TableHead>Duration</TableHead>
                   <TableHead className="text-right">Commission / Swap</TableHead>
                   <TableHead className="text-right">Realized Net P&L</TableHead>
@@ -251,12 +251,7 @@ export default function TradesPage() {
                         {trade.vwap_exit_price || "—"}
                       </TableCell>
                       <TableCell className="font-mono text-[11px] text-slate-400">
-                        {new Date(trade.opened_at_utc).toLocaleString([], {
-                          month: "short",
-                          day: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
+                        {formatISTDateTime(trade.opened_at_utc)}
                       </TableCell>
                       <TableCell className="font-mono text-[11px] text-slate-400">
                         {durationMin > 0 ? `${durationMin}m` : "<1m"}
@@ -371,13 +366,13 @@ export default function TradesPage() {
             {/* Timestamps */}
             <div className="rounded-lg bg-slate-900/50 p-3 border border-slate-800/80 space-y-1.5 text-[11px]">
               <div className="flex justify-between">
-                <span className="text-slate-400 font-sans">Opened At (UTC):</span>
-                <span className="text-slate-200">{new Date(tradeDetail.opened_at_utc).toISOString()}</span>
+                <span className="text-slate-400 font-sans">Opened At (IST):</span>
+                <span className="text-slate-200">{formatISTDateTime(tradeDetail.opened_at_utc)}</span>
               </div>
               {tradeDetail.closed_at_utc && (
                 <div className="flex justify-between">
-                  <span className="text-slate-400 font-sans">Closed At (UTC):</span>
-                  <span className="text-slate-200">{new Date(tradeDetail.closed_at_utc).toISOString()}</span>
+                  <span className="text-slate-400 font-sans">Closed At (IST):</span>
+                  <span className="text-slate-200">{formatISTDateTime(tradeDetail.closed_at_utc)}</span>
                 </div>
               )}
               <div className="flex justify-between">

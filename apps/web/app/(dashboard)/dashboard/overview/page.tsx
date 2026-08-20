@@ -269,7 +269,7 @@ export default function OverviewPage() {
                 Daily Trading Brief
               </CardTitle>
               <CardDescription className="text-xs text-slate-400">
-                Deterministic synthesis of today&apos;s activity (UTC {daily_trading_brief?.date_utc})
+                Deterministic synthesis of today&apos;s trading activity (IST)
               </CardDescription>
             </div>
             <Badge variant="primary">Today</Badge>

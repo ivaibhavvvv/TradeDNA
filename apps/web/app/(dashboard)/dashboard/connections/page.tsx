@@ -33,6 +33,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { PairingDrawer } from "@/components/connections/PairingDrawer";
+import { formatISTDateTime, formatISTTime } from "@/lib/utils";
 
 export default function ConnectionsPage() {
   const { user } = useAuth();
@@ -531,7 +532,7 @@ export default function ConnectionsPage() {
                         <span className="text-[11px] text-slate-500">Last Successful Sync</span>
                         <div className="font-mono text-white">
                           {acc.last_successful_sync_at
-                            ? new Date(acc.last_successful_sync_at).toLocaleTimeString()
+                            ? formatISTTime(acc.last_successful_sync_at)
                             : "Never"}
                         </div>
                         <div className="text-[10px] text-slate-400">Continuous Ingress Window</div>
@@ -615,7 +616,7 @@ export default function ConnectionsPage() {
                                     Build {dev.terminal_build} / v{dev.connector_version}
                                   </td>
                                   <td className="p-2.5 text-slate-400">
-                                    {dev.last_seen_at ? new Date(dev.last_seen_at).toLocaleTimeString() : "Never"}
+                                    {dev.last_seen_at ? formatISTTime(dev.last_seen_at) : "Never"}
                                   </td>
                                   <td className="p-2.5">
                                     <span
