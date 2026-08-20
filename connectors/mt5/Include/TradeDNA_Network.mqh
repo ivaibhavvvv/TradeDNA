@@ -91,7 +91,26 @@ bool PerformHandshakeExchange(
    }
    else
    {
-      PrintFormat("[TradeDNA Network] Handshake failed with HTTP status %d, Error: %d", res, GetLastError());
+      int err = GetLastError();
+      if(err == 4014 || res == -1)
+      {
+         Print("=========================================================================");
+         Print("[TradeDNA Error] WebRequest is NOT enabled in MetaTrader 5 options!");
+         Print("[TradeDNA Fix] In MT5: Click Tools -> Options -> Expert Advisors tab");
+         Print("[TradeDNA Fix] 1. Check 'Allow WebRequest for listed URL:'");
+         Print("[TradeDNA Fix] 2. Add: http://127.0.0.1:8000");
+         Print("[TradeDNA Fix] 3. Click OK, then press F7 on chart to reconnect.");
+         Print("=========================================================================");
+      }
+      else if(res == 401)
+      {
+         Print("[TradeDNA Error] Pairing token expired or already used (HTTP 401). Please generate a fresh token from TradeDNA Dashboard.");
+      }
+      else
+      {
+         string err_body = CharArrayToString(result_data, 0, WHOLE_ARRAY, CP_UTF8);
+         PrintFormat("[TradeDNA Network] Handshake failed with HTTP status %d, Error: %d. Response: %s", res, err, err_body);
+      }
    }
    return false;
 }

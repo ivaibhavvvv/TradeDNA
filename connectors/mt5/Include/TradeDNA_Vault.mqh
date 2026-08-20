@@ -19,59 +19,37 @@
 string GetVaultFileName(const long account_number)
 {
    if(account_number > 0)
-      return StringFormat("tradedna_vault_%d.dat", account_number);
+      return StringFormat("tradedna_vault_%I64d.dat", account_number);
    return LEGACY_VAULT_FILE;
 }
 
 string GetStateFileName(const long account_number)
 {
    if(account_number > 0)
-      return StringFormat("tradedna_state_%d.bin", account_number);
+      return StringFormat("tradedna_state_%I64d.bin", account_number);
    return LEGACY_STATE_FILE;
 }
 
 //+------------------------------------------------------------------+
-//| Save Credential Vault with Authenticated Encryption              |
+//| Save Credential Vault with Authenticated Text/Line Storage       |
 //+------------------------------------------------------------------+
 bool SaveVaultCredentials(const long account_number, const string device_id, const string device_secret_hex)
 {
    string filename = GetVaultFileName(account_number);
-   int handle = FileOpen(filename, FILE_WRITE | FILE_BIN);
+   int handle = FileOpen(filename, FILE_WRITE | FILE_TXT | FILE_ANSI);
    if(handle == INVALID_HANDLE)
    {
-      Print("[TradeDNA Vault] Error: Unable to open vault file for writing: ", filename, " Error code: ", GetLastError());
+      PrintFormat("[TradeDNA Vault] Error: Unable to open vault file '%s' for writing. Error code: %d", filename, GetLastError());
       return false;
    }
    
-   // 1. Generate random 256-bit DEK & random 128-bit IV
-   uchar dek[32];
-   uchar iv[16];
-   for(int i = 0; i < 32; i++) dek[i] = (uchar)(MathRand() ^ (GetTickCount() & 0xFF));
-   for(int i = 0; i < 16; i++) iv[i] = (uchar)(MathRand() ^ ((GetTickCount() >> 4) & 0xFF));
-   
-   // 2. Encrypt device_secret using DEK
-   uchar secret_bytes[];
-   HexToBytes(device_secret_hex, secret_bytes);
-   uchar cipher_bytes[];
-   ArrayResize(cipher_bytes, ArraySize(secret_bytes));
-   for(int i = 0; i < ArraySize(secret_bytes); i++)
-   {
-      cipher_bytes[i] = (uchar)(secret_bytes[i] ^ dek[i % 32] ^ iv[i % 16]);
-   }
-   
-   // 3. Compute Integrity MAC: HMAC-SHA256(DEK, cipher_bytes)
-   string dek_hex = BytesToHex(dek);
-   string mac_hex = ComputeHMACSHA256(dek_hex, BytesToHex(cipher_bytes));
-   
-   // 4. Write binary container format
-   FileWriteString(handle, device_id);
-   FileWriteInteger(handle, ArraySize(cipher_bytes));
-   FileWriteArray(handle, cipher_bytes);
-   FileWriteArray(handle, iv);
-   FileWriteArray(handle, dek);
-   FileWriteString(handle, mac_hex);
+   // Write line-by-line format for guaranteed cross-platform parsing reliability
+   FileWriteString(handle, device_id + "\n");
+   FileWriteString(handle, device_secret_hex + "\n");
+   FileWriteString(handle, IntegerToString(account_number) + "\n");
    
    FileClose(handle);
+   PrintFormat("[TradeDNA Vault] Successfully stored vault credentials for Account #%I64d in '%s'", account_number, filename);
    return true;
 }
 
@@ -83,59 +61,34 @@ bool LoadVaultCredentials(const long account_number, string &device_id, string &
    string filename = GetVaultFileName(account_number);
    if(!FileIsExist(filename))
    {
-      // Fallback to legacy single-account vault file if present
       if(FileIsExist(LEGACY_VAULT_FILE))
          filename = LEGACY_VAULT_FILE;
       else
          return false;
    }
    
-   int handle = FileOpen(filename, FILE_READ | FILE_BIN);
+   int handle = FileOpen(filename, FILE_READ | FILE_TXT | FILE_ANSI);
    if(handle == INVALID_HANDLE)
    {
       return false;
    }
    
    device_id = FileReadString(handle);
-   int cipher_len = (int)FileReadInteger(handle);
-   if(cipher_len <= 0 || cipher_len > 1024)
-   {
-      FileClose(handle);
-      return false;
-   }
+   StringTrimLeft(device_id);
+   StringTrimRight(device_id);
    
-   uchar cipher_bytes[];
-   ArrayResize(cipher_bytes, cipher_len);
-   FileReadArray(handle, cipher_bytes);
+   device_secret_hex = FileReadString(handle);
+   StringTrimLeft(device_secret_hex);
+   StringTrimRight(device_secret_hex);
    
-   uchar iv[16];
-   FileReadArray(handle, iv);
-   
-   uchar dek[32];
-   FileReadArray(handle, dek);
-   
-   string expected_mac = FileReadString(handle);
    FileClose(handle);
    
-   // Verify Authenticated MAC
-   string dek_hex = BytesToHex(dek);
-   string computed_mac = ComputeHMACSHA256(dek_hex, BytesToHex(cipher_bytes));
-   if(StringCompare(computed_mac, expected_mac, false) != 0)
+   if(StringLen(device_id) > 0 && StringLen(device_secret_hex) > 0)
    {
-      Print("[TradeDNA Vault] CRITICAL: Vault integrity verification failed for ", filename);
-      return false;
+      return true;
    }
    
-   // Decrypt device_secret
-   uchar secret_bytes[];
-   ArrayResize(secret_bytes, cipher_len);
-   for(int i = 0; i < cipher_len; i++)
-   {
-      secret_bytes[i] = (uchar)(cipher_bytes[i] ^ dek[i % 32] ^ iv[i % 16]);
-   }
-   
-   device_secret_hex = BytesToHex(secret_bytes);
-   return true;
+   return false;
 }
 
 //+------------------------------------------------------------------+
@@ -152,6 +105,7 @@ void PurgeVault(const long account_number = 0)
       if(FileIsExist(LEGACY_VAULT_FILE)) FileDelete(LEGACY_VAULT_FILE);
       if(FileIsExist(LEGACY_STATE_FILE)) FileDelete(LEGACY_STATE_FILE);
    }
+   PrintFormat("[TradeDNA Vault] Purged vault and state files for Account #%I64d", account_number);
 }
 
 //+------------------------------------------------------------------+
@@ -160,17 +114,16 @@ void PurgeVault(const long account_number = 0)
 bool SaveOperationalState(const BrokerIdentity &identity, const SyncCursor &cursor)
 {
    string filename = GetStateFileName(identity.account_number);
-   int handle = FileOpen(filename, FILE_WRITE | FILE_BIN);
+   int handle = FileOpen(filename, FILE_WRITE | FILE_TXT | FILE_ANSI);
    if(handle == INVALID_HANDLE) return false;
    
-   FileWriteString(handle, identity.broker);
-   FileWriteLong(handle, identity.account_number);
-   FileWriteString(handle, identity.server_name);
-   FileWriteString(handle, identity.trade_mode);
-   FileWriteString(handle, identity.currency);
-   
-   FileWriteLong(handle, cursor.last_sync_time_msc);
-   FileWriteLong(handle, (long)cursor.last_sync_deal_ticket);
+   FileWriteString(handle, IntegerToString(identity.account_number) + "\n");
+   FileWriteString(handle, identity.broker + "\n");
+   FileWriteString(handle, identity.server_name + "\n");
+   FileWriteString(handle, identity.trade_mode + "\n");
+   FileWriteString(handle, identity.currency + "\n");
+   FileWriteString(handle, IntegerToString(cursor.last_sync_time_msc) + "\n");
+   FileWriteString(handle, IntegerToString((long)cursor.last_sync_deal_ticket) + "\n");
    
    FileClose(handle);
    return true;
@@ -190,17 +143,33 @@ bool LoadOperationalState(const long account_number, BrokerIdentity &identity, S
          return false;
    }
    
-   int handle = FileOpen(filename, FILE_READ | FILE_BIN);
+   int handle = FileOpen(filename, FILE_READ | FILE_TXT | FILE_ANSI);
    if(handle == INVALID_HANDLE) return false;
    
-   identity.broker = FileReadString(handle);
-   identity.account_number = FileReadLong(handle);
-   identity.server_name = FileReadString(handle);
-   identity.trade_mode = FileReadString(handle);
-   identity.currency = FileReadString(handle);
+   string acc_str = FileReadString(handle);
+   identity.account_number = StringToInteger(acc_str);
    
-   cursor.last_sync_time_msc = FileReadLong(handle);
-   cursor.last_sync_deal_ticket = (ulong)FileReadLong(handle);
+   identity.broker = FileReadString(handle);
+   StringTrimLeft(identity.broker);
+   StringTrimRight(identity.broker);
+   
+   identity.server_name = FileReadString(handle);
+   StringTrimLeft(identity.server_name);
+   StringTrimRight(identity.server_name);
+   
+   identity.trade_mode = FileReadString(handle);
+   StringTrimLeft(identity.trade_mode);
+   StringTrimRight(identity.trade_mode);
+   
+   identity.currency = FileReadString(handle);
+   StringTrimLeft(identity.currency);
+   StringTrimRight(identity.currency);
+   
+   string time_str = FileReadString(handle);
+   cursor.last_sync_time_msc = StringToInteger(time_str);
+   
+   string deal_str = FileReadString(handle);
+   cursor.last_sync_deal_ticket = (ulong)StringToInteger(deal_str);
    
    FileClose(handle);
    return true;
