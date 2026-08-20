@@ -27,6 +27,7 @@
 //+------------------------------------------------------------------+
 input string   InpTradeDNABaseUrl   = "http://127.0.0.1:8000"; // TradeDNA API Base URL
 input string   InpPairingToken      = "";                       // 64-Char Pairing Token (From Dashboard)
+input bool     InpForceRePair       = false;                    // Force Re-Pairing with New Token
 input int      InpHeartbeatInterval = 30;                       // Heartbeat Interval (Seconds)
 input int      InpSyncWindowDays    = 30;                       // Initial Historical Sync Step (Days)
 
@@ -69,9 +70,9 @@ void UpdateChartStatus()
       " TradeDNA Exness MT5 Read-Only Connector v1.00\n"
       " Mode: STRICTLY READ-ONLY (Zero Execution Proved)\n"
       " Status: %s\n"
-      " Account: %d (%s) | Server: %s\n"
+      " Account: %I64d (%s) | Server: %s\n"
       " Device ID: %s\n"
-      " Last Sync Time (MSC): %d\n"
+      " Last Sync Time (MSC): %I64d\n"
       " Buffered Events: %d | Storage Pressure: %s\n"
       "====================================================",
       state_str, g_current_identity.account_number, g_current_identity.currency,
@@ -115,7 +116,41 @@ int OnInit()
    PrintFormat("[TradeDNA Connector] Active Terminal Account: #%I64d (%s) on Server: %s", 
                g_current_identity.account_number, g_current_identity.currency, g_current_identity.server_name);
    
-   // 1. If user provided a pairing token, prioritize fresh pairing handshake
+   // 1. Check if this specific account is ALREADY paired in its local vault
+   string saved_device_id = "";
+   string saved_device_secret = "";
+   BrokerIdentity stored_identity;
+   SyncCursor stored_cursor;
+   
+   bool has_vault = LoadVaultCredentials(g_current_identity.account_number, saved_device_id, saved_device_secret);
+   bool has_state = LoadOperationalState(g_current_identity.account_number, stored_identity, stored_cursor);
+   
+   if(!InpForceRePair && has_vault && StringLen(saved_device_id) > 0 && StringLen(saved_device_secret) > 0)
+   {
+      // Already Paired! Connect immediately using this account's dedicated vault.
+      g_device_id = saved_device_id;
+      g_device_secret = saved_device_secret;
+      
+      if(has_state && stored_identity.account_number == g_current_identity.account_number)
+      {
+         g_cursor = stored_cursor;
+      }
+      else
+      {
+         g_cursor.last_sync_time_msc = 0;
+         g_cursor.last_sync_deal_ticket = 0;
+         SaveOperationalState(g_current_identity, g_cursor);
+      }
+      
+      g_state = STATE_CONNECTED;
+      PrintFormat("[TradeDNA Connector] SUCCESS: Account #%I64d is paired and active (Device ID: %s)", 
+                  g_current_identity.account_number, g_device_id);
+      EventSetTimer(1);
+      UpdateChartStatus();
+      return INIT_SUCCEEDED;
+   }
+   
+   // 2. If NOT yet paired in vault, check if user provided a valid new pairing token
    if(StringLen(InpPairingToken) >= 32)
    {
       g_state = STATE_PAIRING;
@@ -143,48 +178,17 @@ int OnInit()
       }
       else
       {
-         PrintFormat("[TradeDNA Connector] Handshake failed with token. Attempting to load saved vault for Account #%I64d...", 
+         PrintFormat("[TradeDNA Connector] Handshake failed with provided token for Account #%I64d.", 
                      g_current_identity.account_number);
       }
    }
    
-   // 2. Otherwise load existing credentials and state for this specific account
-   string saved_device_id = "";
-   string saved_device_secret = "";
-   BrokerIdentity stored_identity;
-   SyncCursor stored_cursor;
-   
-   bool has_vault = LoadVaultCredentials(g_current_identity.account_number, saved_device_id, saved_device_secret);
-   bool has_state = LoadOperationalState(g_current_identity.account_number, stored_identity, stored_cursor);
-   
-   if(has_vault && StringLen(saved_device_id) > 0 && StringLen(saved_device_secret) > 0)
-   {
-      g_device_id = saved_device_id;
-      g_device_secret = saved_device_secret;
-      
-      if(has_state && stored_identity.account_number == g_current_identity.account_number)
-      {
-         g_cursor = stored_cursor;
-      }
-      else
-      {
-         g_cursor.last_sync_time_msc = 0;
-         g_cursor.last_sync_deal_ticket = 0;
-         SaveOperationalState(g_current_identity, g_cursor);
-      }
-      
-      g_state = STATE_CONNECTED;
-      PrintFormat("[TradeDNA Connector] SUCCESS: Restored pairing from vault for Account #%I64d (Device ID: %s)", 
-                  g_current_identity.account_number, g_device_id);
-   }
-   else
-   {
-      g_device_id = "";
-      g_device_secret = "";
-      g_state = STATE_UNPAIRED;
-      PrintFormat("[TradeDNA Connector] Account #%I64d is not yet paired. Please enter a pairing token in EA Inputs (F7).", 
-                  g_current_identity.account_number);
-   }
+   // 3. Unpaired state
+   g_device_id = "";
+   g_device_secret = "";
+   g_state = STATE_UNPAIRED;
+   PrintFormat("[TradeDNA Connector] Account #%I64d is UNPAIRED. Please enter a fresh pairing token in EA Inputs (F7).", 
+               g_current_identity.account_number);
    
    EventSetTimer(1); // 1-Second Timer Tick
    UpdateChartStatus();
