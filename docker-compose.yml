@@ -1,0 +1,72 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tradedna_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tradedna_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tradedna_secure_password}
+      POSTGRES_DB: ${POSTGRES_DB:-tradedna_db}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tradedna_user} -d ${POSTGRES_DB:-tradedna_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: tradedna_redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: tradedna_api
+    restart: unless-stopped
+    environment:
+      ENVIRONMENT: development
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-tradedna_user}:${POSTGRES_PASSWORD:-tradedna_secure_password}@postgres:5432/${POSTGRES_DB:-tradedna_db}
+      DATABASE_URL_SYNC: postgresql+psycopg2://${POSTGRES_USER:-tradedna_user}:${POSTGRES_PASSWORD:-tradedna_secure_password}@postgres:5432/${POSTGRES_DB:-tradedna_db}
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: ${JWT_SECRET:-super_secret_jwt_signing_key_32bytes_minimum_length_required_here}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-super_secret_jwt_refresh_key_32bytes_minimum_length_required}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: tradedna_web
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  redisdata:

@@ -1,0 +1,4 @@
+services:
+  nginx:
+    volumes:
+      - ./deploy/nginx/nginx.local.conf:/etc/nginx/nginx.conf:ro

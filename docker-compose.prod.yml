@@ -1,0 +1,126 @@
+version: '3.8'
+
+networks:
+  web_network:
+    driver: bridge
+  db_network:
+    driver: bridge
+    internal: true
+
+volumes:
+  pgdata_prod:
+    driver: local
+  pgbackup_prod:
+    driver: local
+  redisdata_prod:
+    driver: local
+  nginx_certs:
+    driver: local
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: tradedna_postgres_prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata_prod:/var/lib/postgresql/data
+      - pgbackup_prod:/backups
+    networks:
+      - db_network
+    # Port 5432 is explicitly NOT exposed to host in production
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: tradedna_redis_prod
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-tradedna_redis_secret}
+    volumes:
+      - redisdata_prod:/data
+    networks:
+      - db_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: tradedna_api_prod
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      ENVIRONMENT: production
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      DATABASE_URL_SYNC: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-tradedna_redis_secret}@redis:6379/0
+    networks:
+      - web_network
+      - db_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: tradedna_web_prod
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: https://api.tradedna.io/api/v1
+    networks:
+      - web_network
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: tradedna_nginx_prod
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - nginx_certs:/etc/nginx/certs:ro
+    networks:
+      - web_network
+    depends_on:
+      - api
+      - web
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
