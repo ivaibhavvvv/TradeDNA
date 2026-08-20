@@ -58,14 +58,14 @@ async def verify_connector_hmac(
     except ValueError:
         raise UnauthorizedException("Invalid device identifier format.")
 
-    # 2. Validate timestamp freshness (30 seconds skew allowance)
+    # 2. Validate timestamp freshness (300 seconds skew allowance for network & timezone tolerance)
     try:
         client_timestamp_ms = int(x_tradedna_timestamp)
         server_timestamp_ms = int(time.time() * 1000)
         skew_seconds = abs(server_timestamp_ms - client_timestamp_ms) / 1000.0
-        if skew_seconds > 30.0:
+        if skew_seconds > 300.0:
             raise UnauthorizedException(
-                f"Request timestamp expired or desynchronized: skew of {skew_seconds:.2f}s exceeds 30s allowance."
+                f"Request timestamp expired or desynchronized: skew of {skew_seconds:.2f}s exceeds 300s allowance."
             )
     except ValueError:
         raise UnauthorizedException("Malformed timestamp header.")

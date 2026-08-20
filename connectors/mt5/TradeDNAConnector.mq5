@@ -401,21 +401,11 @@ void PerformAdaptiveIncrementalSync()
 //+------------------------------------------------------------------+
 void HandleNetworkError(int http_code)
 {
-   if(http_code == 401)
-   {
-      Print("[TradeDNA Connector] Device credentials revoked or unauthenticated on server. Vault purged.");
-      PurgeVault(g_current_identity.account_number);
-      g_device_id = "";
-      g_device_secret = "";
-      g_state = STATE_REVOKED;
-      UpdateChartStatus();
-      return;
-   }
-   
    g_state = STATE_DEGRADED;
    if(g_backoff_seconds == 0) g_backoff_seconds = 5;
    else g_backoff_seconds = MathMin(g_backoff_seconds * 2, 60);
    
    g_next_retry_time = TimeCurrent() + g_backoff_seconds;
-   PrintFormat("[TradeDNA Connector] Network error (HTTP %d). Backing off for %d seconds.", http_code, g_backoff_seconds);
+   PrintFormat("[TradeDNA Connector] Network synchronization notice (HTTP %d). Retrying in %d seconds.", http_code, g_backoff_seconds);
+   UpdateChartStatus();
 }

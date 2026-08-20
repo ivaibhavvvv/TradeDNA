@@ -155,7 +155,8 @@ string SignRequestPayload(
    string body_sha256 = ComputeStringSHA256Hex(raw_body_json);
    
    // 2. Format canonical string: Device-ID | Timestamp | Nonce | Body-SHA256
-   string canonical_payload = StringFormat("%s|%d|%s|%s", device_id, timestamp_ms, nonce, body_sha256);
+   // Using direct string concatenation for 64-bit integer safety
+   string canonical_payload = device_id + "|" + IntegerToString(timestamp_ms) + "|" + nonce + "|" + body_sha256;
    
    // 3. Compute HMAC-SHA256 over canonical string
    return ComputeHMACSHA256(device_secret_hex, canonical_payload);

@@ -131,7 +131,7 @@ int SendSignedSyncEnvelope(
    string url = base_url + "/api/v1/exness/sync";
    string envelope_json = StringFormat("{\"payload_type\":\"%s\",\"data\":%s}", payload_type, inner_json_payload);
    
-   long timestamp_ms = (long)TimeCurrent() * 1000 + (long)(GetTickCount() % 1000);
+   long timestamp_ms = (long)TimeGMT() * 1000 + (long)(GetTickCount() % 1000);
    string nonce = GenerateNonce(16);
    
    // Compute RFC 2104 HMAC-SHA256 signature
