@@ -51,7 +51,7 @@ class DashboardService:
         if account_number is not None:
             stmt_sync = stmt_sync.where(AccountSyncState.account_number == account_number)
         else:
-            stmt_sync = stmt_sync.order_by(AccountSyncState.created_at.desc())
+            stmt_sync = stmt_sync.order_by(AccountSyncState.last_successful_sync_at.desc(), AccountSyncState.updated_at.desc())
 
         res_sync = await session.execute(stmt_sync)
         sync_state = res_sync.scalars().first()
@@ -65,20 +65,30 @@ class DashboardService:
             res_dev = await session.execute(stmt_dev)
             paired_dev = res_dev.scalars().first()
             if paired_dev:
-                sync_state = AccountSyncState(
-                    tenant_id=user.tenant_id,
-                    account_number=paired_dev.account_number,
-                    broker=paired_dev.broker or "EXNESS",
-                    server_name=paired_dev.server_name or "Exness",
-                    currency=paired_dev.currency or "USD",
-                    trade_mode=paired_dev.trade_mode or "DEMO",
-                    sync_status="CONNECTED",
-                    current_cursor_time_msc=0,
-                    current_cursor_deal_ticket=0,
-                    last_successful_sync_at=datetime.now(timezone.utc),
+                # Double check if sync_state exists by 4-tuple to prevent duplicate insert race
+                stmt_exist = select(AccountSyncState).where(
+                    AccountSyncState.tenant_id == user.tenant_id,
+                    AccountSyncState.broker == (paired_dev.broker or "EXNESS"),
+                    AccountSyncState.account_number == paired_dev.account_number,
+                    AccountSyncState.server_name == (paired_dev.server_name or "Exness"),
                 )
-                session.add(sync_state)
-                await session.flush()
+                res_exist = await session.execute(stmt_exist)
+                sync_state = res_exist.scalars().first()
+                if not sync_state:
+                    sync_state = AccountSyncState(
+                        tenant_id=user.tenant_id,
+                        account_number=paired_dev.account_number,
+                        broker=paired_dev.broker or "EXNESS",
+                        server_name=paired_dev.server_name or "Exness",
+                        currency=paired_dev.currency or "USD",
+                        trade_mode=paired_dev.trade_mode or "DEMO",
+                        sync_status="CONNECTED",
+                        current_cursor_time_msc=0,
+                        current_cursor_deal_ticket=0,
+                        last_successful_sync_at=datetime.now(timezone.utc),
+                    )
+                    session.add(sync_state)
+                    await session.flush()
             else:
                 # If explicit account_number requested but not owned by tenant -> 404 (zero leakage)
                 if account_number is not None:

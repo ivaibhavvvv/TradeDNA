@@ -22,21 +22,61 @@ string BytesToHex(const uchar &data[])
 }
 
 //+------------------------------------------------------------------+
+//| Sanitize Hex String to ensure only valid 0-9, a-f, A-F chars     |
+//+------------------------------------------------------------------+
+string CleanHex(const string hex_str)
+{
+   string clean = "";
+   int len = StringLen(hex_str);
+   for(int i = 0; i < len; i++)
+   {
+      ushort ch = StringGetCharacter(hex_str, i);
+      if((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F'))
+      {
+         clean += ShortToString(ch);
+      }
+   }
+   return clean;
+}
+
+//+------------------------------------------------------------------+
+//| Sanitize ASCII String (strips CRLF and non-printable chars)      |
+//+------------------------------------------------------------------+
+string CleanString(const string str)
+{
+   string clean = "";
+   int len = StringLen(str);
+   for(int i = 0; i < len; i++)
+   {
+      ushort ch = StringGetCharacter(str, i);
+      if(ch >= 32 && ch <= 126)
+      {
+         clean += ShortToString(ch);
+      }
+   }
+   return clean;
+}
+
+//+------------------------------------------------------------------+
 //| Convert hexadecimal string to byte array                         |
 //+------------------------------------------------------------------+
-int HexToBytes(const string hex_str, uchar &output[])
+int HexToBytes(const string input_hex_str, uchar &output[])
 {
+   string hex_str = CleanHex(input_hex_str);
    int len = StringLen(hex_str);
-   if(len % 2 != 0) return 0;
+   if(len == 0 || len % 2 != 0)
+   {
+      ArrayResize(output, 0);
+      return 0;
+   }
    
    int out_size = len / 2;
    ArrayResize(output, out_size);
    
    for(int i = 0; i < out_size; i++)
    {
-      string byte_str = StringSubstr(hex_str, i * 2, 2);
-      ushort ch0 = StringGetCharacter(byte_str, 0);
-      ushort ch1 = StringGetCharacter(byte_str, 1);
+      ushort ch0 = StringGetCharacter(hex_str, i * 2);
+      ushort ch1 = StringGetCharacter(hex_str, i * 2 + 1);
       
       int v0 = (ch0 >= '0' && ch0 <= '9') ? (ch0 - '0') :
                (ch0 >= 'a' && ch0 <= 'f') ? (ch0 - 'a' + 10) :
@@ -92,7 +132,11 @@ string ComputeStringSHA256Hex(const string str)
 string ComputeHMACSHA256(const string key_hex, const string message)
 {
    uchar key[];
-   HexToBytes(key_hex, key);
+   int key_len = HexToBytes(key_hex, key);
+   if(key_len == 0)
+   {
+      PrintFormat("[TradeDNA Crypto] Error: Invalid key length (%d) for secret hex", key_len);
+   }
    
    uchar K_prime[64];
    ArrayInitialize(K_prime, 0);
@@ -169,8 +213,9 @@ string SignRequestPayload(
    string body_sha256 = ComputeStringSHA256Hex(raw_body_json);
    
    // 2. Format canonical string: Device-ID | Timestamp | Nonce | Body-SHA256
-   // Using direct string concatenation for 64-bit integer safety
-   string canonical_payload = device_id + "|" + IntegerToString(timestamp_ms) + "|" + nonce + "|" + body_sha256;
+   string clean_dev_id = CleanString(device_id);
+   string clean_nonce = CleanHex(nonce);
+   string canonical_payload = clean_dev_id + "|" + IntegerToString(timestamp_ms) + "|" + clean_nonce + "|" + body_sha256;
    
    // 3. Compute HMAC-SHA256 over canonical string
    return ComputeHMACSHA256(device_secret_hex, canonical_payload);

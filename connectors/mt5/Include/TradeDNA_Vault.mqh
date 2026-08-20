@@ -44,8 +44,8 @@ bool SaveVaultCredentials(const long account_number, const string device_id, con
    }
    
    // Write line-by-line format for guaranteed cross-platform parsing reliability
-   FileWriteString(handle, device_id + "\n");
-   FileWriteString(handle, device_secret_hex + "\n");
+   FileWriteString(handle, CleanString(device_id) + "\n");
+   FileWriteString(handle, CleanHex(device_secret_hex) + "\n");
    FileWriteString(handle, IntegerToString(account_number) + "\n");
    
    FileClose(handle);
@@ -73,17 +73,12 @@ bool LoadVaultCredentials(const long account_number, string &device_id, string &
       return false;
    }
    
-   device_id = FileReadString(handle);
-   StringTrimLeft(device_id);
-   StringTrimRight(device_id);
-   
-   device_secret_hex = FileReadString(handle);
-   StringTrimLeft(device_secret_hex);
-   StringTrimRight(device_secret_hex);
+   device_id = CleanString(FileReadString(handle));
+   device_secret_hex = CleanHex(FileReadString(handle));
    
    FileClose(handle);
    
-   if(StringLen(device_id) > 0 && StringLen(device_secret_hex) > 0)
+   if(StringLen(device_id) > 0 && StringLen(device_secret_hex) >= 64)
    {
       return true;
    }
