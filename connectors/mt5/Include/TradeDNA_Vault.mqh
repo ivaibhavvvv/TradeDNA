@@ -58,13 +58,11 @@ bool SaveVaultCredentials(const long account_number, const string device_id, con
 //+------------------------------------------------------------------+
 bool LoadVaultCredentials(const long account_number, string &device_id, string &device_secret_hex)
 {
+   if(account_number <= 0) return false;
    string filename = GetVaultFileName(account_number);
    if(!FileIsExist(filename))
    {
-      if(FileIsExist(LEGACY_VAULT_FILE))
-         filename = LEGACY_VAULT_FILE;
-      else
-         return false;
+      return false;
    }
    
    int handle = FileOpen(filename, FILE_READ | FILE_TXT | FILE_ANSI);
@@ -75,8 +73,16 @@ bool LoadVaultCredentials(const long account_number, string &device_id, string &
    
    device_id = CleanString(FileReadString(handle));
    device_secret_hex = CleanHex(FileReadString(handle));
+   long stored_account = StringToInteger(FileReadString(handle));
    
    FileClose(handle);
+   
+   if(stored_account > 0 && stored_account != account_number)
+   {
+      PrintFormat("[TradeDNA Vault] Warning: Stored account #%I64d in file '%s' does not match active account #%I64d", 
+                  stored_account, filename, account_number);
+      return false;
+   }
    
    if(StringLen(device_id) > 0 && StringLen(device_secret_hex) >= 64)
    {

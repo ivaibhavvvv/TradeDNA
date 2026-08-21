@@ -1159,9 +1159,9 @@ class DashboardService:
             freshness_state = "RECOVERING"
             freshness_label = "Recovering Disrupted Ingress..."
             polling_interval = 3000
-        elif sync_state.sync_status in ("SYNCING", "INITIALIZING") and (delta_sec is None or sync_state.current_cursor_deal_ticket == 0):
+        elif sync_state.sync_status == "INITIALIZING" and delta_sec is None:
             freshness_state = "SYNCING"
-            freshness_label = "Synchronizing Ingress..."
+            freshness_label = "Awaiting Initial Synchronization"
             polling_interval = 3000
         elif delta_sec is None:
             freshness_state = "SYNCING"
@@ -1191,26 +1191,22 @@ class DashboardService:
             freshness_label = "Reconciliation Discrepancy"
 
         # Historical sync progress and stage calculation
-        hist_progress = 100 if sync_state.current_cursor_deal_ticket > 0 else 50
+        hist_progress = 100
         sync_stage = "READY"
         if is_revoked:
             sync_stage = "READY"
+            hist_progress = 100
         elif not is_connected:
             sync_stage = "CONNECTING"
-        elif sync_state.sync_status == "INITIALIZING":
+            hist_progress = 0
+        elif sync_state.sync_status == "INITIALIZING" and delta_sec is None:
             hist_progress = 15
             sync_stage = "DISCOVERING_ACCOUNT"
-        elif sync_state.sync_status == "SYNCING":
-            if sync_state.current_cursor_deal_ticket == 0:
-                hist_progress = 65
-                sync_stage = "DOWNLOADING_HISTORY"
-            else:
-                hist_progress = 75
-                sync_stage = "PROCESSING_EVENTS"
         elif sync_state.sync_status == "RECOVERING":
             hist_progress = 85
             sync_stage = "PROCESSING_EVENTS"
-        elif sync_state.sync_status in ("CURRENT", "IDLE"):
+        elif delta_sec is not None:
+            hist_progress = 100
             if recon_run and not recon_run.is_clean:
                 sync_stage = "RECONCILING"
             else:
